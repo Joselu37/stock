@@ -30,7 +30,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
-        <h1>🥩 Stock Carnicería</h1>
+        <h1>🥩 2HERMANOS</h1>
         <p className="subtitle">Iniciá sesión para continuar</p>
         {error && <div className="error-box">{error}</div>}
         <label>Email</label>

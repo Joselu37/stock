@@ -1,6 +1,6 @@
 const express = require('express');
 const pool = require('../db');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, soloAdmin } = require('../middleware/auth');
 
 const TIPOS_VALIDOS = ['contado', 'transferencia', 'tarjeta', 'fiado'];
 const EPSILON = 0.01; // tolerancia para redondeo de centavos
@@ -9,9 +9,17 @@ module.exports = function (io) {
   const router = express.Router();
   router.use(authMiddleware);
 
-  // GET /api/ventas?tipo=contado  -> incluye ventas donde ese tipo fue AL MENOS uno de los medios usados
+  // GET /api/ventas?tipo=contado&desde=2026-08-01&hasta=2026-08-31
+  // Los empleados (no admin) solo pueden ver las ventas del dia de hoy, sin importar que rango pidan.
   router.get('/', async (req, res) => {
     const { tipo } = req.query;
+    let { desde, hasta } = req.query;
+    const esAdmin = req.usuario.rol === 'admin';
+    if (!esAdmin) {
+      const hoy = new Date().toISOString().slice(0, 10);
+      desde = hoy;
+      hasta = hoy;
+    }
     try {
       let query = `SELECT v.*, c.nombre AS cliente_nombre,
                     COALESCE(
@@ -20,17 +28,76 @@ module.exports = function (io) {
                     ) AS pagos
                    FROM ventas v
                    LEFT JOIN clientes c ON c.id = v.cliente_id`;
+      const condiciones = [];
       const params = [];
       if (tipo && TIPOS_VALIDOS.includes(tipo)) {
         params.push(tipo);
-        query += ` WHERE EXISTS (SELECT 1 FROM venta_pagos vp WHERE vp.venta_id = v.id AND vp.tipo_pago = $${params.length})`;
+        condiciones.push(`EXISTS (SELECT 1 FROM venta_pagos vp WHERE vp.venta_id = v.id AND vp.tipo_pago = $${params.length})`);
       }
-      query += ' ORDER BY v.fecha DESC LIMIT 200';
+      if (desde) {
+        params.push(desde);
+        condiciones.push(`v.fecha >= $${params.length}::date`);
+      }
+      if (hasta) {
+        params.push(hasta);
+        condiciones.push(`v.fecha < ($${params.length}::date + INTERVAL '1 day')`);
+      }
+      if (condiciones.length) query += ' WHERE ' + condiciones.join(' AND ');
+      query += ' ORDER BY v.fecha DESC LIMIT 500';
       const { rows } = await pool.query(query, params);
       res.json(rows);
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'Error obteniendo ventas' });
+    }
+  });
+
+  // GET /api/ventas/resumen?agrupar=dia|semana|mes&desde=&hasta=  (solo admin: reportes historicos)
+  router.get('/resumen', soloAdmin, async (req, res) => {
+    const agrupar = ['dia', 'semana', 'mes'].includes(req.query.agrupar) ? req.query.agrupar : 'dia';
+    const unidadSql = { dia: 'day', semana: 'week', mes: 'month' }[agrupar];
+    const { desde, hasta } = req.query;
+    try {
+      const params = [];
+      let condicion = '';
+      if (desde) { params.push(desde); condicion += ` AND fecha >= $${params.length}::date`; }
+      if (hasta) { params.push(hasta); condicion += ` AND fecha < ($${params.length}::date + INTERVAL '1 day')`; }
+
+      const { rows: periodos } = await pool.query(
+        `SELECT date_trunc('${unidadSql}', fecha) AS periodo,
+                COUNT(*) AS cantidad_ventas,
+                SUM(total) AS total
+         FROM ventas
+         WHERE 1=1 ${condicion}
+         GROUP BY periodo ORDER BY periodo DESC LIMIT 60`,
+        params
+      );
+
+      const { rows: porCategoria } = await pool.query(
+        `SELECT date_trunc('${unidadSql}', v.fecha) AS periodo, p.categoria,
+                SUM(vi.subtotal) AS total, SUM(vi.cantidad) AS cantidad
+         FROM ventas v
+         JOIN venta_items vi ON vi.venta_id = v.id
+         JOIN productos p ON p.id = vi.producto_id
+         WHERE 1=1 ${condicion.replace(/fecha/g, 'v.fecha')}
+         GROUP BY periodo, p.categoria ORDER BY periodo DESC LIMIT 120`,
+        params
+      );
+
+      const { rows: porTipoPago } = await pool.query(
+        `SELECT date_trunc('${unidadSql}', v.fecha) AS periodo, vp.tipo_pago,
+                SUM(vp.monto) AS total
+         FROM ventas v
+         JOIN venta_pagos vp ON vp.venta_id = v.id
+         WHERE 1=1 ${condicion.replace(/fecha/g, 'v.fecha')}
+         GROUP BY periodo, vp.tipo_pago ORDER BY periodo DESC LIMIT 120`,
+        params
+      );
+
+      res.json({ agrupar, periodos, porCategoria, porTipoPago });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Error obteniendo el resumen de ventas' });
     }
   });
 
@@ -157,6 +224,59 @@ module.exports = function (io) {
       await client.query('ROLLBACK');
       console.error(err);
       res.status(400).json({ error: err.message || 'Error registrando la venta' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // DELETE /api/ventas/:id -> anula la venta: devuelve el stock y revierte el saldo fiado si correspondia
+  router.delete('/:id', async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const ventaRes = await client.query('SELECT * FROM ventas WHERE id = $1 FOR UPDATE', [id]);
+      if (ventaRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Venta no encontrada' });
+      }
+      const venta = ventaRes.rows[0];
+
+      const itemsRes = await client.query('SELECT * FROM venta_items WHERE venta_id = $1', [id]);
+      const stockDevuelto = [];
+      for (const item of itemsRes.rows) {
+        const prodRes = await client.query('SELECT * FROM productos WHERE id = $1 FOR UPDATE', [item.producto_id]);
+        if (prodRes.rows.length > 0) {
+          const nuevoStock = Number(prodRes.rows[0].stock_actual) + Number(item.cantidad);
+          await client.query('UPDATE productos SET stock_actual = $1, actualizado_en = NOW() WHERE id = $2', [nuevoStock, item.producto_id]);
+          await client.query(
+            'INSERT INTO movimientos_stock (producto_id, tipo, cantidad, motivo, usuario_id) VALUES ($1,$2,$3,$4,$5)',
+            [item.producto_id, 'alta', item.cantidad, `Anulacion de venta #${id}`, req.usuario.id]
+          );
+          stockDevuelto.push({ producto_id: item.producto_id, stock_actual: nuevoStock });
+        }
+      }
+
+      const pagosRes = await client.query('SELECT * FROM venta_pagos WHERE venta_id = $1', [id]);
+      const montoFiado = pagosRes.rows.filter((p) => p.tipo_pago === 'fiado').reduce((acc, p) => acc + Number(p.monto), 0);
+      if (montoFiado > 0 && venta.cliente_id) {
+        await client.query('UPDATE clientes SET saldo_adeudado = GREATEST(saldo_adeudado - $1, 0) WHERE id = $2', [montoFiado, venta.cliente_id]);
+      }
+
+      await client.query('DELETE FROM ventas WHERE id = $1', [id]); // venta_items y venta_pagos caen en cascada
+
+      await client.query('COMMIT');
+
+      io.emit('venta:eliminada', { id: Number(id) });
+      for (const s of stockDevuelto) io.emit('stock:cambio', s);
+      if (montoFiado > 0 && venta.cliente_id) io.emit('cliente:actualizado', { id: venta.cliente_id });
+
+      res.json({ ok: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error(err);
+      res.status(500).json({ error: 'Error anulando la venta' });
     } finally {
       client.release();
     }

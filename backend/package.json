@@ -1,5 +1,5 @@
 {
-  "name": "carniceria-backend",
+  "name": "2hermanos-backend",
   "version": "1.0.0",
   "description": "Backend API + WebSockets para gestion de stock de carniceria y despensa",
   "main": "src/index.js",

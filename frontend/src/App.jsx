@@ -6,12 +6,20 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Productos from './pages/Productos.jsx';
 import Ventas from './pages/Ventas.jsx';
+import Reportes from './pages/Reportes.jsx';
+import Usuarios from './pages/Usuarios.jsx';
 import Clientes from './pages/Clientes.jsx';
 import Alertas from './pages/Alertas.jsx';
 
 function RutaPrivada({ children }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function RutaAdmin({ children }) {
+  const usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
+  if (usuario?.rol !== 'admin') return <Navigate to="/" replace />;
   return children;
 }
 
@@ -37,18 +45,20 @@ function Layout({ children }) {
   return (
     <div className="layout">
       <aside className="sidebar">
-        <h1 className="logo">🥩 Carnicería</h1>
+        <h1 className="logo">🥩 2HERMANOS</h1>
         <nav>
           <NavLink to="/" end>Panel de Control</NavLink>
           <NavLink to="/productos">Productos</NavLink>
           <NavLink to="/ventas">Ventas</NavLink>
+          {usuario?.rol === 'admin' && <NavLink to="/reportes">Reportes</NavLink>}
           <NavLink to="/clientes">Clientes</NavLink>
+          {usuario?.rol === 'admin' && <NavLink to="/usuarios">Usuarios</NavLink>}
           <NavLink to="/alertas">
             Alertas {alertasNoLeidas > 0 && <span className="badge">{alertasNoLeidas}</span>}
           </NavLink>
         </nav>
         <div className="user-box">
-          <span>{usuario?.nombre}</span>
+          <span>{usuario?.nombre} {usuario?.rol === 'admin' ? '(Admin)' : '(Colaborador)'}</span>
           <button onClick={logout}>Salir</button>
         </div>
       </aside>
@@ -71,7 +81,9 @@ export default function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/productos" element={<Productos />} />
                   <Route path="/ventas" element={<Ventas />} />
+                  <Route path="/reportes" element={<RutaAdmin><Reportes /></RutaAdmin>} />
                   <Route path="/clientes" element={<Clientes />} />
+                  <Route path="/usuarios" element={<RutaAdmin><Usuarios /></RutaAdmin>} />
                   <Route path="/alertas" element={<Alertas />} />
                 </Routes>
               </Layout>

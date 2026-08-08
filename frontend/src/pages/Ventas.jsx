@@ -72,6 +72,17 @@ export default function Ventas() {
     setMostrarPopup(true);
   }
 
+  async function borrarVenta(id) {
+    if (!confirm(`¿Anular la venta #${id}? Esto va a devolver el stock de los productos vendidos.`)) return;
+    try {
+      await api.delete(`/ventas/${id}`);
+      setMensaje(`Venta #${id} anulada. El stock fue repuesto.`);
+      cargarHistorial();
+    } catch (err) {
+      setMensaje(err.response?.data?.error || 'Error al anular la venta');
+    }
+  }
+
   async function confirmarVentaConPago({ pagos, cliente_id }) {
     setProcesando(true);
     try {
@@ -160,7 +171,7 @@ export default function Ventas() {
 
       <h3>Historial de ventas</h3>
       <table className="tabla">
-        <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Medio de pago</th><th>Total</th></tr></thead>
+        <thead><tr><th>#</th><th>Fecha</th><th>Cliente</th><th>Medio de pago</th><th>Total</th><th></th></tr></thead>
         <tbody>
           {historial.map((v) => (
             <tr key={v.id}>
@@ -173,9 +184,10 @@ export default function Ventas() {
                   : ETIQUETAS_TIPO[v.tipo_pago] || v.tipo_pago}
               </td>
               <td>${Number(v.total).toFixed(2)}</td>
+              <td><button className="danger" onClick={() => borrarVenta(v.id)}>Anular</button></td>
             </tr>
           ))}
-          {historial.length === 0 && <tr><td colSpan={5}>Sin ventas registradas todavía.</td></tr>}
+          {historial.length === 0 && <tr><td colSpan={6}>Sin ventas registradas todavía.</td></tr>}
         </tbody>
       </table>
     </div>
