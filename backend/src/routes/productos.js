@@ -6,15 +6,19 @@ module.exports = function (io) {
   const router = express.Router();
   router.use(authMiddleware);
 
-  // GET /api/productos?buscar=texto
+  // GET /api/productos?buscar=texto&categoria=despensa|carniceria
   router.get('/', async (req, res) => {
-    const { buscar } = req.query;
+    const { buscar, categoria } = req.query;
     try {
       let query = 'SELECT * FROM productos WHERE activo = TRUE';
       const params = [];
       if (buscar) {
         params.push(`%${buscar.toLowerCase()}%`);
         query += ` AND (LOWER(nombre) LIKE $${params.length} OR codigo_barras LIKE $${params.length})`;
+      }
+      if (categoria && ['despensa', 'carniceria'].includes(categoria)) {
+        params.push(categoria);
+        query += ` AND categoria = $${params.length}`;
       }
       query += ' ORDER BY nombre ASC';
       const { rows } = await pool.query(query, params);
@@ -41,11 +45,12 @@ module.exports = function (io) {
   router.post('/', async (req, res) => {
     const { codigo_barras, nombre, categoria, unidad, precio_unitario, stock_actual, stock_minimo } = req.body;
     if (!nombre) return res.status(400).json({ error: 'El nombre es requerido' });
+    const categoriaFinal = ['despensa', 'carniceria'].includes(categoria) ? categoria : 'despensa';
     try {
       const { rows } = await pool.query(
         `INSERT INTO productos (codigo_barras, nombre, categoria, unidad, precio_unitario, stock_actual, stock_minimo)
          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-        [codigo_barras || null, nombre, categoria || 'general', unidad || 'kg', precio_unitario || 0, stock_actual || 0, stock_minimo || 0]
+        [codigo_barras || null, nombre, categoriaFinal, unidad || 'kg', precio_unitario || 0, stock_actual || 0, stock_minimo || 0]
       );
       const producto = rows[0];
       if (producto.stock_actual > 0) {
@@ -67,6 +72,10 @@ module.exports = function (io) {
   router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { codigo_barras, nombre, categoria, unidad, precio_unitario, stock_minimo } = req.body;
+    if (categoria && !['despensa', 'carniceria'].includes(categoria)) {
+      return res.status(400).json({ error: 'Categoria invalida, debe ser despensa o carniceria' });
+    }
+    const categoriaFinal = categoria || null;
     try {
       const { rows } = await pool.query(
         `UPDATE productos SET
@@ -78,7 +87,7 @@ module.exports = function (io) {
           stock_minimo = COALESCE($6, stock_minimo),
           actualizado_en = NOW()
          WHERE id = $7 RETURNING *`,
-        [codigo_barras, nombre, categoria, unidad, precio_unitario, stock_minimo, id]
+        [codigo_barras, nombre, categoriaFinal, unidad, precio_unitario, stock_minimo, id]
       );
       if (rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
       io.emit('producto:actualizado', rows[0]);

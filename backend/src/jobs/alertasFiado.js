@@ -6,10 +6,11 @@ const { enviarEmailAlerta } = require('../utils/mailer');
 async function verificarFiadosVencidos(io) {
   const dias = Number(process.env.FIADO_ALERT_DIAS) || 7;
   const { rows: ventasVencidas } = await pool.query(
-    `SELECT v.id, v.total, v.fecha, c.id AS cliente_id, c.nombre AS cliente_nombre, c.saldo_adeudado
-     FROM ventas v
+    `SELECT vp.venta_id AS id, vp.monto AS total, v.fecha, c.id AS cliente_id, c.nombre AS cliente_nombre, c.saldo_adeudado
+     FROM venta_pagos vp
+     JOIN ventas v ON v.id = vp.venta_id
      JOIN clientes c ON c.id = v.cliente_id
-     WHERE v.tipo_pago = 'fiado' AND v.pagado = FALSE
+     WHERE vp.tipo_pago = 'fiado' AND v.pagado = FALSE
        AND v.fecha <= NOW() - ($1 || ' days')::interval
      ORDER BY v.fecha ASC`,
     [dias]

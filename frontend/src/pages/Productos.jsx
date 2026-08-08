@@ -3,7 +3,38 @@ import api from '../api';
 import { conectarSocket } from '../socket';
 import BarcodeScanner from '../components/BarcodeScanner.jsx';
 
-const vacio = { codigo_barras: '', nombre: '', categoria: 'general', unidad: 'kg', precio_unitario: '', stock_actual: '', stock_minimo: '' };
+const vacio = { codigo_barras: '', nombre: '', categoria: 'despensa', unidad: 'kg', precio_unitario: '', stock_actual: '', stock_minimo: '' };
+
+function TablaCategoria({ titulo, productos, onEditar, onAjustar, onEliminar }) {
+  return (
+    <div className="bloque-categoria">
+      <h3>{titulo} <span className="contador">({productos.length})</span></h3>
+      <table className="tabla">
+        <thead>
+          <tr><th>Código</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Unidad</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+          {productos.map((p) => (
+            <tr key={p.id} className={Number(p.stock_actual) <= Number(p.stock_minimo) ? 'fila-alerta' : ''}>
+              <td>{p.codigo_barras || '-'}</td>
+              <td>{p.nombre}</td>
+              <td>${Number(p.precio_unitario).toFixed(2)}</td>
+              <td>{p.stock_actual}</td>
+              <td>{p.unidad}</td>
+              <td className="acciones">
+                <button onClick={() => onEditar(p)}>Editar</button>
+                <button onClick={() => onAjustar(p.id, 'alta')}>+ Stock</button>
+                <button onClick={() => onAjustar(p.id, 'baja')}>- Stock</button>
+                <button className="danger" onClick={() => onEliminar(p.id)}>Baja</button>
+              </td>
+            </tr>
+          ))}
+          {productos.length === 0 && <tr><td colSpan={6}>Sin productos en esta categoría.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function Productos() {
   const [productos, setProductos] = useState([]);
@@ -93,6 +124,9 @@ export default function Productos() {
     }
   }, []);
 
+  const despensa = productos.filter((p) => p.categoria === 'despensa');
+  const carniceria = productos.filter((p) => p.categoria === 'carniceria');
+
   return (
     <div>
       <BarcodeScanner onScan={handleScan} />
@@ -112,8 +146,11 @@ export default function Productos() {
             <input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} required />
           </div>
           <div>
-            <label>Categoría</label>
-            <input value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} />
+            <label>Categoría *</label>
+            <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+              <option value="despensa">Despensa</option>
+              <option value="carniceria">Carnicería</option>
+            </select>
           </div>
           <div>
             <label>Unidad</label>
@@ -144,32 +181,12 @@ export default function Productos() {
         </div>
       </form>
 
-      <input className="buscador" placeholder="🔍 Buscar producto por nombre o código..." value={buscar} onChange={(e) => setBuscar(e.target.value)} />
+      <input className="buscador" placeholder="🔍 Buscar producto por nombre o código (en ambas categorías)..." value={buscar} onChange={(e) => setBuscar(e.target.value)} />
 
-      <table className="tabla">
-        <thead>
-          <tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Unidad</th><th>Acciones</th></tr>
-        </thead>
-        <tbody>
-          {productos.map((p) => (
-            <tr key={p.id} className={Number(p.stock_actual) <= Number(p.stock_minimo) ? 'fila-alerta' : ''}>
-              <td>{p.codigo_barras || '-'}</td>
-              <td>{p.nombre}</td>
-              <td>{p.categoria}</td>
-              <td>${Number(p.precio_unitario).toFixed(2)}</td>
-              <td>{p.stock_actual}</td>
-              <td>{p.unidad}</td>
-              <td className="acciones">
-                <button onClick={() => editar(p)}>Editar</button>
-                <button onClick={() => ajustarStock(p.id, 'alta')}>+ Stock</button>
-                <button onClick={() => ajustarStock(p.id, 'baja')}>- Stock</button>
-                <button className="danger" onClick={() => eliminar(p.id)}>Baja</button>
-              </td>
-            </tr>
-          ))}
-          {productos.length === 0 && <tr><td colSpan={7}>No se encontraron productos.</td></tr>}
-        </tbody>
-      </table>
+      <div className="columnas-categorias">
+        <TablaCategoria titulo="🥩 Carnicería" productos={carniceria} onEditar={editar} onAjustar={ajustarStock} onEliminar={eliminar} />
+        <TablaCategoria titulo="🛒 Despensa" productos={despensa} onEditar={editar} onAjustar={ajustarStock} onEliminar={eliminar} />
+      </div>
     </div>
   );
 }
