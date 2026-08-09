@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import api from '../api';
 import { conectarSocket } from '../socket';
 import BarcodeScanner from '../components/BarcodeScanner.jsx';
+import EscanerCamara from '../components/EscanerCamara.jsx';
 
 const vacio = { codigo_barras: '', nombre: '', categoria: 'despensa', unidad: 'kg', precio_unitario: '', stock_actual: '', stock_minimo: '' };
 
@@ -131,7 +132,8 @@ export default function Productos() {
     <div>
       <BarcodeScanner onScan={handleScan} />
       <h2>Gestión de Productos</h2>
-      <p className="hint">📷 Podés usar el lector de código de barras en cualquier momento de esta pantalla.</p>
+      <p className="hint">Podés usar un lector físico de código de barras en cualquier momento, o escanear con la cámara del celular:</p>
+      <EscanerCamara onScan={handleScan} />
 
       <form className="form-card" onSubmit={handleSubmit}>
         <h3>{editandoId ? 'Editar producto' : 'Alta de producto'}</h3>

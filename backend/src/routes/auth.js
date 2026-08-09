@@ -50,6 +50,26 @@ router.post('/usuarios', authMiddleware, soloAdmin, async (req, res) => {
   }
 });
 
+// PUT /api/auth/password (el usuario logueado cambia su propia contraseña)
+router.put('/password', authMiddleware, async (req, res) => {
+  const { passwordActual, passwordNueva } = req.body;
+  if (!passwordActual || !passwordNueva) return res.status(400).json({ error: 'Faltan datos' });
+  if (passwordNueva.length < 6) return res.status(400).json({ error: 'La contraseña nueva debe tener al menos 6 caracteres' });
+  try {
+    const { rows } = await pool.query('SELECT * FROM usuarios WHERE id = $1', [req.usuario.id]);
+    const usuario = rows[0];
+    if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const ok = bcrypt.compareSync(passwordActual, usuario.password_hash);
+    if (!ok) return res.status(401).json({ error: 'La contraseña actual no es correcta' });
+    const nuevoHash = bcrypt.hashSync(passwordNueva, 10);
+    await pool.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [nuevoHash, req.usuario.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', authMiddleware, (req, res) => {
   res.json(req.usuario);

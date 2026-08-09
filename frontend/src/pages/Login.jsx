@@ -4,7 +4,7 @@ import api from '../api';
 import { conectarSocket } from '../socket';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@carniceria.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [cargando, setCargando] = useState(false);
@@ -38,7 +38,6 @@ export default function Login() {
         <label>Contraseña</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <button type="submit" disabled={cargando}>{cargando ? 'Ingresando...' : 'Ingresar'}</button>
-        <p className="hint">Usuario por defecto: admin@carniceria.com / admin123</p>
       </form>
     </div>
   );

@@ -86,3 +86,12 @@ input, select { padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; 
 .partes-pago { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0; }
 .parte-pago-fila { display: flex; gap: 0.5rem; align-items: center; }
 .parte-pago-fila select { flex: 1; }
+
+/* Escaneo por camara */
+.boton-camara {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  background: #111827; color: #fff; border: none; border-radius: 8px;
+  padding: 0.6rem 1rem; font-size: 0.9rem; cursor: pointer; margin: 0.6rem 0;
+}
+.boton-camara:hover { background: #1f2937; }
+.video-camara { width: 100%; border-radius: 10px; background: #000; max-height: 60vh; }

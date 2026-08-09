@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '../api';
 import BarcodeScanner from '../components/BarcodeScanner.jsx';
+import EscanerCamara from '../components/EscanerCamara.jsx';
 import PopupPago from '../components/PopupPago.jsx';
 
 const ETIQUETAS_TIPO = { contado: 'Efectivo', transferencia: 'Transferencia', tarjeta: 'Tarjeta', fiado: 'Fiado', mixto: 'Mixto' };
@@ -107,7 +108,8 @@ export default function Ventas() {
     <div>
       <BarcodeScanner onScan={handleScan} />
       <h2>Ventas</h2>
-      <p className="hint">📷 Escaneá o buscá productos de Despensa o Carnicería, armá el carrito y elegí el medio de pago al confirmar.</p>
+      <p className="hint">Escaneá con lector físico o con la cámara, o buscá por nombre. Armá el carrito y elegí el medio de pago al confirmar.</p>
+      <EscanerCamara onScan={handleScan} />
       {mensaje && <div className="info-box">{mensaje}</div>}
 
       <input

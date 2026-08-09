@@ -8,6 +8,7 @@ import Productos from './pages/Productos.jsx';
 import Ventas from './pages/Ventas.jsx';
 import Reportes from './pages/Reportes.jsx';
 import Usuarios from './pages/Usuarios.jsx';
+import MiCuenta from './pages/MiCuenta.jsx';
 import Clientes from './pages/Clientes.jsx';
 import Alertas from './pages/Alertas.jsx';
 
@@ -56,6 +57,7 @@ function Layout({ children }) {
           <NavLink to="/alertas">
             Alertas {alertasNoLeidas > 0 && <span className="badge">{alertasNoLeidas}</span>}
           </NavLink>
+          <NavLink to="/mi-cuenta">Mi cuenta</NavLink>
         </nav>
         <div className="user-box">
           <span>{usuario?.nombre} {usuario?.rol === 'admin' ? '(Admin)' : '(Colaborador)'}</span>
@@ -85,6 +87,7 @@ export default function App() {
                   <Route path="/clientes" element={<Clientes />} />
                   <Route path="/usuarios" element={<RutaAdmin><Usuarios /></RutaAdmin>} />
                   <Route path="/alertas" element={<Alertas />} />
+                  <Route path="/mi-cuenta" element={<MiCuenta />} />
                 </Routes>
               </Layout>
             </RutaPrivada>
